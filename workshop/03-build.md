@@ -38,7 +38,7 @@ Paste into `game.js`. Save.
 
 ## ✅ Test Before Moving On
 
-- [ ] Dark page loads in browser
+- [ ] Page loads in browser
 - [ ] Space bar starts the game
 - [ ] Snake moves and responds to arrow keys
 - [ ] Snake grows when it eats the gold dot
