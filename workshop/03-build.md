@@ -6,6 +6,8 @@ Open **Copilot Chat** (`Ctrl+Shift+I` or click the Copilot icon in the sidebar).
 
 > **Important:** Use the prompts **in order**. Each one builds on the last. Save (`Ctrl+S`) after every paste — Live Server will auto-refresh your browser.
 
+> **🆘 Stuck?** If your AI gives you broken code and you can't fix it, the `reference/` folder in this repo has working versions of every file. Copy what you need and keep going.
+
 ---
 
 ## Step 1 — HTML Structure
@@ -162,134 +164,171 @@ Output ONLY the CSS code.
 
 ---
 
-## Step 3 — Core Snake Game
+## Step 3A — Game Setup, State & Drawing
 
-This is the most important step. The prompt is long because it specifies exact behavior to ensure a working game.
+We'll build `game.js` in three smaller steps so it's easier to test. Start with the canvas, state, and drawing.
 
 > Open `game.js`, then paste this prompt into Copilot Chat:
 
 ```
-Write the complete game.js for CyberDefender Snake. This must be a fully working snake game.
+Write the first part of game.js for CyberDefender Snake.
 
-CANVAS SETUP:
-- Get canvas with: document.getElementById("gameCanvas")
-- Get context: canvas.getContext("2d")
-- Grid: 20 columns x 20 rows, cell size = 24px (canvas is 480x480)
+CANVAS SETUP (at the very top of the file):
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const COLS = 20;
+const ROWS = 20;
+const CELL = 24;
 
-GAME STATE (use a single object called "state"):
-- status: "idle" (values: "idle", "playing", "paused", "gameover")
-- snake: array of {x, y} objects, initially [{x:10,y:10}, {x:9,y:10}, {x:8,y:10}]
-- direction: {x:1, y:0} (moving right initially)
-- nextDirection: {x:1, y:0} (buffered input)
-- food: {x, y} object (random position, not on snake)
-- score: 0
-- speed: 120 (milliseconds per tick)
-- gameInterval: null
-- sessionSeconds: 0
-- sessionTimer: null
-- threat: null (will be used later)
-- defense: null (will be used later)
-- activeCurriculum: null (will be used later)
-- lessonsCompleted: 0
-- totalThreats: 0
-- totalDefenses: 0
-- totalPackets: 0
+GAME STATE (create a single object called "state"):
+const state = {
+    status: "idle",
+    snake: [{x:10, y:10}, {x:9, y:10}, {x:8, y:10}],
+    direction: {x:1, y:0},
+    nextDirection: {x:1, y:0},
+    food: null,
+    score: 0,
+    speed: 120,
+    gameInterval: null,
+    sessionSeconds: 0,
+    sessionTimer: null,
+    threat: null,
+    defense: null,
+    activeCurriculum: null,
+    lessonsCompleted: 0,
+    totalThreats: 0,
+    totalDefenses: 0,
+    totalPackets: 0,
+    cardTimeLeft: 20,
+    cardTimer: null
+};
 
-CORE FUNCTIONS:
+FUNCTIONS TO WRITE:
 
-1. spawnFood(): Set state.food to a random {x, y} where x and y are 0-19, ensuring the position is NOT occupied by any snake segment. Keep generating until a free cell is found.
+1. spawnFood(): Generate random {x, y} where x is 0-19 and y is 0-19. Keep generating until the position does NOT overlap any snake segment. Set state.food to the valid position.
 
-2. draw(): Clear the canvas. Draw the background color #f0faf0. Draw faint grid lines using strokeStyle "rgba(0,166,81,0.08)". Then:
-   - Draw each snake segment as a filled rounded rectangle (24px with 3px radius) in color #00A651. Make the head slightly brighter (#00C261).
-   - Draw food as a small chip: a 36x36 rounded rect centered on the cell with fill "rgba(255,255,255,0.9)", stroke "rgba(156,163,175,0.5)", a "◈" symbol centered inside in grey, and text "DATA_INT" below it in 8px font.
-   - If state.threat exists, draw it as a chip with fill "rgba(239,68,68,0.1)", stroke "rgba(239,68,68,0.5)", a "✉" symbol in red, and label below.
-   - If state.defense exists, draw it as a chip with fill "rgba(0,166,81,0.1)", stroke "rgba(0,166,81,0.5)", a "🛡" symbol in green, and label below.
-   - If BOTH threat and defense exist, draw a dashed line between them using strokeStyle "rgba(0,0,0,0.15)", lineWidth 1, setLineDash([4,4]).
-   - If status is "idle", draw centered text "PRESS [SPACE] TO START" in 16px Inter, color #6b7280.
-   - If status is "gameover", draw centered text "GAME OVER — PRESS [SPACE]" in 16px Inter, color #E31937.
-   - Update #coordinates span with current head position.
+2. drawRoundedRect(x, y, w, h, r): Helper that draws a rounded rectangle path using ctx.beginPath(), ctx.moveTo(), ctx.lineTo(), ctx.quadraticCurveTo(), and ctx.closePath(). Do NOT use ctx.roundRect() — it's not supported in older browsers.
 
-3. move(): This runs every tick when playing.
-   - Set state.direction = state.nextDirection
-   - Calculate newHead = { x: state.snake[0].x + state.direction.x, y: state.snake[0].y + state.direction.y }
-   - WALL COLLISION: if newHead.x < 0 or >= 20 or newHead.y < 0 or >= 20, call gameOver() and return
-   - SELF COLLISION: if any snake segment matches newHead, call gameOver() and return
-   - Add newHead to the FRONT of state.snake (unshift)
-   - FOOD CHECK: if newHead matches state.food position, increment state.score, call spawnFood(), update the dashboard, add telemetry log, increment totalPackets. Do NOT remove tail.
-   - DEFENSE CHECK: if state.defense exists and newHead matches state.defense position, add 500 to score, set state.defense = null, update dashboard, add telemetry log, increment totalDefenses. Then if state.threat still exists, also remove state.threat (pair cleared). Do NOT remove tail (snake grows).
-   - THREAT CHECK: if state.threat exists and newHead matches state.threat position, subtract 1000 from score (minimum 0), set state.threat = null, update dashboard, add telemetry log "THREAT DETECTED" in red, increment totalThreats. Remove tail normally.
-   - OTHERWISE (no collision with food/defense/threat): remove the last segment (pop) — normal movement.
-   - Call draw()
-   - Call updateDashboard()
+3. drawChip(cx, cy, fillColor, strokeColor, symbol, symbolColor, label): Draws a 36x36 rounded chip centered on grid cell (cx, cy). Fill with fillColor, stroke with strokeColor. Draw the symbol text centered inside. Draw the label text 8px below the chip in grey.
 
-4. startGame(): Only run if status is "idle" or "gameover".
-   - Reset state: snake back to initial, direction {x:1,y:0}, nextDirection {x:1,y:0}, score 0, status "playing", threat null, defense null, totalThreats 0, totalDefenses 0, totalPackets 0, lessonsCompleted 0.
-   - Call spawnFood()
-   - Clear any existing gameInterval, then: state.gameInterval = setInterval(move, state.speed)
-   - Clear any existing sessionTimer. Reset sessionSeconds to 0. Start: state.sessionTimer = setInterval(() => { state.sessionSeconds++; update #session-timer text to formatted time }, 1000)
-   - Call draw()
+4. draw(): Clear the entire canvas. Fill background with #f0faf0. Draw grid lines with strokeStyle "rgba(0,166,81,0.08)".
+   Then draw:
+   - Each snake segment: filled rounded rect (CELL-2 size, 3px radius, 1px inset). Color #00A651, head #00C261.
+   - Food (if state.food exists): drawChip with fill "rgba(255,255,255,0.9)", stroke "rgba(156,163,175,0.5)", symbol "◈" in "#9ca3af", label "DATA_INT".
+   - Threat (if state.threat exists): drawChip with fill "rgba(239,68,68,0.1)", stroke "rgba(239,68,68,0.5)", symbol "✉" in "rgba(239,68,68,0.8)", label "THREAT: " + name (truncated to 12 chars).
+   - Defense (if state.defense exists): drawChip with fill "rgba(0,166,81,0.1)", stroke "rgba(0,166,81,0.5)", symbol "🛡" in "rgba(0,166,81,0.8)", label "DEFENSE: " + name (truncated to 12 chars).
+   - Dashed tether: if BOTH threat and defense exist, draw a dashed line between them with strokeStyle "rgba(0,0,0,0.15)", setLineDash([4,4]). Use ctx.save()/ctx.restore().
+   - If status is "idle": draw semi-transparent overlay then "PRESS [SPACE] TO START" centered on canvas, 16px font, color #6b7280.
+   - If status is "gameover": draw semi-transparent overlay then "GAME OVER — PRESS [SPACE]" centered, 16px font, color #E31937.
+   - Update document.getElementById("coordinates") with head position.
 
-5. gameOver(): Set status to "gameover". clearInterval(state.gameInterval). clearInterval(state.sessionTimer). Call draw(). Add telemetry log "SESSION TERMINATED".
+AT THE VERY BOTTOM of the file, add these two lines:
+spawnFood();
+draw();
 
-6. updateDashboard():
-   - Set #score-value textContent to state.score
-   - Set #progress-fill width to min(state.score / 50 * 100, 100) + "%"
-   - Set #rank-percent textContent to min(state.score, 100) + "%"
-   - Set #threats-count to state.totalThreats
-   - Set #defense-count to state.totalDefenses
-   - Set #packets-count to state.totalPackets
-
-7. addTelemetryLog(message, type): Prepend an entry to #telemetry-log.
-   - Create a div with class "log-entry"
-   - Inside: <span class="log-time">HH:MM:SS</span> <span class="log-success or log-danger">MESSAGE</span>
-   - type "success" uses class "log-success", type "danger" uses "log-danger"
-   - Use the current time for the timestamp
-
-8. addScoreEntry(label, points, color): Prepend to #score-log.
-   - Create div with class "score-entry"
-   - Inside: <span class="event-label" style="color:${color}">${label}</span><span class="event-score" style="color:${color}">+${points}</span>
-
-EVENT LISTENERS (attach to window, outside any function):
-
-1. "keydown" listener:
-   - Space: if status is "idle" or "gameover", call startGame(). If status is "playing", do nothing. Prevent default for Space.
-   - Arrow keys AND WASD: change state.nextDirection. Prevent reversing (e.g., if going right, can't go left). Map: ArrowUp/w/W = {x:0,y:-1}, ArrowDown/s/S = {x:0,y:1}, ArrowLeft/a/A = {x:-1,y:0}, ArrowRight/d/D = {x:1,y:0}.
-
-2. Difficulty buttons: document.querySelectorAll(".diff-btn").forEach — on click, remove "active" from all, add "active" to clicked, set state.speed = parseInt(button.dataset.speed). If currently playing, clearInterval(state.gameInterval), state.gameInterval = setInterval(move, state.speed).
-
-3. Mobile control buttons: document.querySelectorAll(".ctrl-btn").forEach — on click, map data-dir to direction changes same as arrow keys.
-
-INITIALIZATION (at the bottom of the file):
-- Call spawnFood()
-- Call draw() — this shows the idle screen with "PRESS [SPACE] TO START"
-
-Output the COMPLETE game.js file with ALL functions fully implemented. Do NOT use placeholders or TODO comments. Every function must have real working code.
+Output the COMPLETE file. Do NOT use ctx.roundRect(). Do NOT use TODO or placeholder comments. Every function must be fully implemented.
 ```
 
 **Paste** the full output into `game.js`. **Save.**
 
-### ✅ Check — Stop and test EACH of these:
+### ✅ Check: You should see the canvas with faint grid lines and "PRESS [SPACE] TO START" in the center. A small white DATA_INT chip should be visible somewhere on the grid. If the canvas is blank, press F12 → Console and fix any red errors.
+
+> **⚠️ Not working?** Compare your output against `reference/game.js` — copy the top section (everything from the start through the `draw()` function and the two initialization lines at the bottom).
+
+---
+
+## Step 3B — Movement, Collision & Game Loop
+
+> Paste this prompt into Copilot Chat. **Make sure your current game.js is open** so Copilot can see it:
+
+```
+I have a game.js with canvas setup, state object, spawnFood(), drawRoundedRect(), drawChip(), and draw() functions. I need to add the game loop. Add these functions ABOVE the spawnFood()/draw() lines at the bottom. Do NOT rewrite the existing code — output ONLY the new functions:
+
+1. move(): Runs every game tick.
+   - Copy nextDirection into direction: state.direction = { ...state.nextDirection }
+   - Calculate newHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y }
+   - WALL CHECK: if newHead.x < 0 or >= 20 or newHead.y < 0 or >= 20, call gameOver() and return
+   - SELF CHECK: if any snake segment has same x,y as newHead, call gameOver() and return
+   - Add newHead to front: state.snake.unshift(newHead)
+   - Set let ate = false
+   - FOOD: if newHead.x === state.food.x && newHead.y === state.food.y then: state.score += 1, state.totalPackets++, spawnFood(), ate = true, call addTelemetryLog("DATA PACKET COLLECTED +1", "success"), call addScoreEntry("Data Packet", 1, "#6b7280")
+   - DEFENSE: if state.defense exists and newHead matches defense position then: state.score += 500, state.totalDefenses++, ate = true, call addTelemetryLog("NODE SECURED — " + state.defense.name, "success"), call addScoreEntry("Defense: " + state.defense.name, 500, "#00A651"), set state.defense = null, if state.threat exists set state.threat = null, if state.activeCurriculum exists call showCard("defense") and return
+   - THREAT: if state.threat exists and newHead matches threat position then: state.score = Math.max(0, state.score - 1000), state.totalThreats++, call addTelemetryLog("THREAT DETECTED — " + state.threat.name, "danger"), call addScoreEntry("Threat: " + state.threat.name, -1000, "#E31937"), set state.threat = null, if state.defense exists set state.defense = null, if state.activeCurriculum exists call showCard("threat") and return
+   - If !ate then state.snake.pop() (remove tail for normal movement)
+   - If state.threat === null and typeof CURRICULUM !== "undefined" and CURRICULUM.length > 0 and Math.random() < 0.02 then call spawnThreatPair() (if it exists)
+   - Call draw()
+   - Call updateDashboard()
+
+2. startGame(): Only run if status is "idle" or "gameover".
+   - Reset: snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}], direction = {x:1,y:0}, nextDirection = {x:1,y:0}, score = 0, status = "playing", threat = null, defense = null, activeCurriculum = null, totalThreats = 0, totalDefenses = 0, totalPackets = 0, lessonsCompleted = 0
+   - Clear #score-log innerHTML and #telemetry-log innerHTML
+   - Call spawnFood()
+   - if (state.gameInterval) clearInterval(state.gameInterval)
+   - state.gameInterval = setInterval(move, state.speed)
+   - if (state.sessionTimer) clearInterval(state.sessionTimer)
+   - state.sessionSeconds = 0
+   - state.sessionTimer = setInterval that increments sessionSeconds and updates #session-timer with formatted [SESSION: HH:MM:SS]
+   - Call addTelemetryLog("SESSION INITIALIZED", "success")
+   - Call updateDashboard() then draw()
+
+3. gameOver(): Set status = "gameover", clearInterval(state.gameInterval), clearInterval(state.sessionTimer), call addTelemetryLog("SESSION TERMINATED", "danger"), call updateDashboard(), call draw()
+
+4. updateDashboard(): Set #score-value text to state.score. Set #progress-fill width to min(score/50*100, 100)%. Set #rank-percent to min(score,100)%. Set #threats-count, #defense-count, #packets-count.
+
+5. addTelemetryLog(message, type): Prepend a div.log-entry to #telemetry-log. Inside: <span class="log-time">HH:MM:SS</span> <span class="log-success" or "log-danger">message</span>. Use current time.
+
+6. addScoreEntry(label, points, color): Prepend a div.score-entry to #score-log. Inside: <span class="event-label" with color>label</span><span class="event-score" with color>+/-points</span>. Clear "No recent activity..." text first.
+
+NOTE: showCard() and spawnThreatPair() don't exist yet — the move() function should only call them if they're defined. Use: if (typeof showCard === "function") showCard(type) and if (typeof spawnThreatPair === "function") spawnThreatPair().
+
+Output ONLY the 6 new functions. I will paste them into my existing file.
+```
+
+**Paste** the 6 functions into `game.js`, **above** the `spawnFood();` and `draw();` lines at the bottom. **Save.**
+
+### ✅ Check: The canvas still shows "PRESS [SPACE] TO START" but nothing should be broken. If you see console errors, fix them before continuing.
+
+> **⚠️ Not working?** Copy the `move()`, `startGame()`, `gameOver()`, `updateDashboard()`, `addTelemetryLog()`, and `addScoreEntry()` functions from `reference/game.js`.
+
+---
+
+## Step 3C — Controls & Event Listeners
+
+> Paste this prompt into Copilot Chat:
+
+```
+I have a game.js with state, draw(), move(), startGame(), gameOver(), updateDashboard(), addTelemetryLog(), and addScoreEntry() functions. I need to add event listeners. Add this code ABOVE the spawnFood()/draw() initialization lines at the bottom:
+
+1. window.addEventListener("keydown", (e) => { ... }):
+   - If e.code === "Space": preventDefault(). If state.status is "idle" or "gameover", call startGame(). If state.status is "paused", call dismissCard() if it exists (typeof dismissCard === "function").
+   - If state.status !== "playing", return (ignore other keys).
+   - Create a keyMap object: { ArrowUp: {x:0,y:-1}, KeyW: {x:0,y:-1}, ArrowDown: {x:0,y:1}, KeyS: {x:0,y:1}, ArrowLeft: {x:-1,y:0}, KeyA: {x:-1,y:0}, ArrowRight: {x:1,y:0}, KeyD: {x:1,y:0} }
+   - Look up newDir = keyMap[e.code]. If found: only set state.nextDirection = newDir if it's not the exact reverse of state.direction (check: newDir.x !== -state.direction.x || newDir.y !== -state.direction.y). Call e.preventDefault().
+
+2. Difficulty buttons: document.querySelectorAll(".diff-btn").forEach(btn => btn.addEventListener("click", () => { remove "active" from all .diff-btn, add "active" to clicked btn, state.speed = parseInt(btn.dataset.speed), if state.status === "playing" then clearInterval(state.gameInterval) and state.gameInterval = setInterval(move, state.speed) }))
+
+3. Mobile controls: document.querySelectorAll(".ctrl-btn").forEach(btn => btn.addEventListener("click", () => { if state.status !== "playing" return. Map btn.dataset.dir: up={x:0,y:-1}, down={x:0,y:1}, left={x:-1,y:0}, right={x:1,y:0}. Same reverse-prevention check. Set state.nextDirection. }))
+
+Output ONLY the event listener code. I'll paste it above the initialization lines at the bottom of game.js.
+```
+
+**Paste** the event listener code into `game.js`, above the `spawnFood();` / `draw();` lines at the bottom. **Save.**
+
+### ✅ Test — the game should now be fully playable:
 
 Open your browser at `http://127.0.0.1:5500`.
 
-1. **You should see the canvas with "PRESS [SPACE] TO START" text** — if the canvas is blank, open the console (`F12` → Console) and share any red error with Copilot.
-2. **Press Space** — the snake should start moving to the right.
-3. **Arrow keys or WASD** — the snake should change direction.
-4. **Eat a DATA_INT chip** — the snake should grow and the score should increase.
-5. **Hit a wall** — "GAME OVER" should appear. Press Space to restart.
-6. **Check the right sidebar** — score and telemetry log should update.
-7. **Click a difficulty button** — the snake speed should change.
+1. **"PRESS [SPACE] TO START"** visible on canvas
+2. **Press Space** — snake starts moving right
+3. **Arrow keys / WASD** — snake changes direction
+4. **Eat DATA_INT chip** — snake grows, score +1, telemetry log updates
+5. **Hit a wall** — "GAME OVER" appears, press Space to restart
+6. **Click difficulty buttons** — speed changes
+7. **Session timer** ticks in the top bar
 
-**If something doesn't work**, open the browser console (`F12` → Console tab), copy the red error message, and paste it into Copilot Chat:
+**If something doesn't work**, open `F12` → Console, copy the error, and ask Copilot to fix it. Or compare with `reference/game.js`.
 
-```
-Fix this error in my game.js: [paste the error here]
-
-Here is my current game.js:
-[paste your game.js]
-```
-
-> **Don't move to Step 4 until the snake moves and you can eat food.** This is the foundation — everything else builds on it.
+> **🛑 Don't move to Step 4 until the snake moves and you can eat food.** This is the foundation.
 
 ---
 
@@ -302,32 +341,32 @@ Now that the snake works, let's add cybersecurity threat/defense node pairs.
 ```
 I have a working CyberDefender snake game in game.js. I need to add threat/defense pair spawning.
 
-Add these functions to my existing game.js (do NOT rewrite the whole file — output ONLY the new/modified code):
+Add these to my existing game.js (do NOT rewrite the whole file — output ONLY the new/modified code):
 
-1. At the top of the file, add: let CURRICULUM = []; and then a fetch call:
+1. At the top of the file (after the canvas/state setup), add:
+   let CURRICULUM = [];
    fetch("lessons.json").then(r => r.json()).then(data => { CURRICULUM = data; }).catch(err => console.warn("Could not load lessons.json:", err));
 
-2. spawnThreatPair(): Pick a random lesson from CURRICULUM. Store it in state.activeCurriculum. Generate a random position for the threat (not on snake, not on food, not on defense). Generate a random position for the defense (not on snake, not on food, not on threat). Set:
+2. Add function spawnThreatPair(): Pick a random lesson from CURRICULUM. Store it in state.activeCurriculum. Generate a random position for the threat (not on snake, not on food, not on defense). Generate a random position for the defense (not on snake, not on food, not on threat). Set:
    state.threat = { x, y, name: lesson.threat.name }
    state.defense = { x, y, name: lesson.defense.name }
 
-3. Modify the move() function: After the food check, add a random chance to spawn a threat pair. If state.threat is null and Math.random() < 0.02, call spawnThreatPair(). This gives roughly a 2% chance per tick.
+The move() function already has a check that calls spawnThreatPair() randomly if state.threat is null. So just adding this function will enable threat/defense spawning.
 
-4. In the DEFENSE CHECK section of move(): When the snake eats a defense node, after adding score, also call addTelemetryLog with "NODE SECURED" as success, and call addScoreEntry. Log: "Input " + state.activeCurriculum.defense.description.substring(0,50) + "..."
-
-5. In the THREAT CHECK section of move(): When the snake hits a threat, after subtracting score, also call addTelemetryLog with "THREAT DETECTED" as danger. Log: state.activeCurriculum.threat.description.substring(0,50) + "..."
-
-Output ONLY the new fetch code, the spawnThreatPair function, and the modified move() function. Show the COMPLETE move() function so I can replace it entirely.
+Output ONLY the fetch code and the spawnThreatPair function.
 ```
 
-**Paste** the new code into `game.js` — add the `fetch` and `spawnThreatPair` function, and **replace** your existing `move()` function with the updated one. **Save.**
+**Paste** the `CURRICULUM` + `fetch` code near the top of `game.js` (after the state object). **Paste** the `spawnThreatPair` function above the `move()` function. **Save.**
 
 ### ✅ Check:
 
-1. Play the game for 10-20 seconds — a red **threat node** and green **defense node** should appear.
-2. A dashed line should connect them.
-3. Eating the defense node gives +500 points and a green telemetry log.
-4. Hitting the threat subtracts 1000 points and logs a red warning.
+1. Play the game for 10-20 seconds — a red **threat node** and green **defense node** should appear
+2. A dashed line should connect them
+3. Eating the defense node gives +500 points and a green telemetry log
+4. Hitting the threat subtracts 1000 points and logs a red warning
+5. Check the console — there should be no fetch errors for `lessons.json`
+
+> **⚠️ Nodes not appearing?** Make sure `lessons.json` is in the same folder as `index.html`. Check the console for fetch errors.
 5. Check the console — there should be no fetch errors for `lessons.json`.
 
 ---

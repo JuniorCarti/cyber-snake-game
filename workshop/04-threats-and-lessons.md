@@ -2,6 +2,8 @@
 
 Your snake game already spawns threat/defense pairs from Step 3. This step adds the **lesson card overlay** — when the snake collects a defense node or hits a threat, the game pauses and shows an educational card about that cybersecurity topic.
 
+> **🆘 Stuck at any point?** The `reference/` folder in this repo has working versions of every file.
+
 ---
 
 ## Step 1 — Confirm Everything Works So Far

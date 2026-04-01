@@ -20,6 +20,10 @@ link to [workshop](workshop/workshop_guide.md)
 ```
 cyberdefender-workshop/
 ├── lessons.json          ← Download this into your project
+├── reference/            ← Working implementation (fallback if AI output is broken)
+│   ├── index.html
+│   ├── style.css
+│   └── game.js
 ├── workshop/
 │   ├── workshop_guide.md ← Start here
 │   ├── 01-overview.md
@@ -37,4 +41,4 @@ cyberdefender-workshop/
 
 ---
 
-*Safaricom Decode 2026*
+*Safaricom De{c0}dE 2026*
